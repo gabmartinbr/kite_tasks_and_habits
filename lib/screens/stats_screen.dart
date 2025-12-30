@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/habit_model.dart';
 
 class StatsScreen extends StatefulWidget {
@@ -14,42 +15,68 @@ class StatsScreen extends StatefulWidget {
 }
 
 class _StatsScreenState extends State<StatsScreen> {
-  DateTime _focusedDay = DateTime.now();
+  DateTime _selectedWeek = DateTime.now();
+  List<int> _weeklyPomodoros = [0, 0, 0, 0, 0, 0, 0];
 
-  DateTime _getStartOfWeek(DateTime date) {
-    return date.subtract(Duration(days: date.weekday - 1));
+  @override
+  void initState() {
+    super.initState();
+    _loadPomodoroData();
   }
 
-  // CÁLCULO REAL DE HÁBITOS
-  double _getHabitCompletion(int dayIndex) {
-    int todayIndex = DateTime.now().weekday - 1;
-    // Solo muestra datos si es HOY y estamos en la semana actual
-    if (dayIndex == todayIndex && _isSameWeek(_focusedDay, DateTime.now())) {
-      return widget.habits.where((h) => h.isCompletedToday).length.toDouble();
+  Future<void> _loadPomodoroData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String>? savedWeekly = prefs.getStringList('weekly_list');
+    if (savedWeekly != null) {
+      setState(() => _weeklyPomodoros = savedWeekly.map((e) => int.parse(e)).toList());
     }
-    return 0.0; // Sin datos de ejemplo
   }
 
-  // CÁLCULO REAL DE TAREAS
-  double _getTaskCompletion(int dayIndex) {
-    int todayIndex = DateTime.now().weekday - 1;
-    if (dayIndex == todayIndex && _isSameWeek(_focusedDay, DateTime.now())) {
-      return widget.priorities.where((p) => p['isDone']).length.toDouble();
-    }
-    return 0.0; // Sin datos de ejemplo
+  // --- LÓGICA DE FILTRADO Y CÁLCULO REAL ---
+
+  bool _isFuture() {
+    final now = DateTime.now();
+    final startOfCurrentWeek = now.subtract(Duration(days: now.weekday - 1));
+    final startOfSelectedWeek = _selectedWeek.subtract(Duration(days: _selectedWeek.weekday - 1));
+    return startOfSelectedWeek.isAfter(startOfCurrentWeek);
   }
 
-  bool _isSameWeek(DateTime d1, DateTime d2) {
-    final s1 = _getStartOfWeek(d1);
-    final s2 = _getStartOfWeek(d2);
+  bool _isCurrentWeek() {
+    final now = DateTime.now();
+    final s1 = _selectedWeek.subtract(Duration(days: _selectedWeek.weekday - 1));
+    final s2 = now.subtract(Duration(days: now.weekday - 1));
     return s1.year == s2.year && s1.month == s2.month && s1.day == s2.day;
+  }
+
+  Map<String, dynamic> _calculateWeeklyStats() {
+    if (_isFuture()) return {'done': 0, 'total': 0, 'percent': 0.0};
+
+    // Meta: Hábitos (frecuencia semanal) + Tareas actuales
+    int totalHabitGoals = widget.habits.length * 7;
+    int totalTaskGoals = widget.priorities.length;
+    int grandTotal = totalHabitGoals + totalTaskGoals;
+
+    // Progreso (Solo cuenta si es la semana actual, para histórico se requiere DB)
+    int completedSoFar = 0;
+    if (_isCurrentWeek()) {
+      completedSoFar = widget.habits.where((h) => h.isCompletedToday).length +
+                       widget.priorities.where((p) => p['isDone']).length;
+    }
+
+    return {
+      'done': completedSoFar,
+      'total': grandTotal,
+      'percent': grandTotal > 0 ? (completedSoFar / grandTotal) : 0.0,
+    };
   }
 
   @override
   Widget build(BuildContext context) {
-    final start = _getStartOfWeek(_focusedDay);
+    final start = _selectedWeek.subtract(Duration(days: _selectedWeek.weekday - 1));
     final end = start.add(const Duration(days: 6));
     String range = "${DateFormat('d MMM').format(start)} - ${DateFormat('d MMM').format(end)}";
+    
+    final stats = _calculateWeeklyStats();
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -60,147 +87,43 @@ class _StatsScreenState extends State<StatsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 20),
-              const Text("Progreso", style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+              const Text("Progreso", style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+
+              _buildWeekSelector(range),
               const SizedBox(height: 25),
-
-              // Selector de Semana
-              Container(
-                padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(12)),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 15, color: Colors.white), 
-                      onPressed: () => setState(() => _focusedDay = _focusedDay.subtract(const Duration(days: 7)))),
-                    Text(range.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                    IconButton(icon: const Icon(Icons.arrow_forward_ios, size: 15, color: Colors.white), 
-                      onPressed: () => setState(() => _focusedDay = _focusedDay.add(const Duration(days: 7)))),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 40),
-              _sectionHeader("ACTIVIDAD SEMANAL"),
-              const SizedBox(height: 30),
-
-              SizedBox(
-                height: 180,
-                child: BarChart(
-                  BarChartData(
-                    alignment: BarChartAlignment.spaceAround,
-                    // Altura dinámica basada en el total de elementos
-                    maxY: (widget.habits.length > widget.priorities.length 
-                        ? widget.habits.length 
-                        : widget.priorities.length).toDouble() + 1,
-                    barGroups: List.generate(7, (i) => BarChartGroupData(
-                      x: i,
-                      barsSpace: 4,
-                      barRods: [
-                        BarChartRodData(toY: _getHabitCompletion(i), color: Colors.white, width: 10, borderRadius: const BorderRadius.vertical(top: Radius.circular(3))),
-                        BarChartRodData(toY: _getTaskCompletion(i), color: Colors.white.withOpacity(0.2), width: 10, borderRadius: const BorderRadius.vertical(top: Radius.circular(3))),
-                      ],
-                    )),
-                    titlesData: FlTitlesData(
-                      leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (value, meta) {
-                            const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 10),
-                              child: Text(days[value.toInt()], style: const TextStyle(color: Colors.white24, fontSize: 12)),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    gridData: const FlGridData(show: false),
-                    borderData: FlBorderData(show: false),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 15),
+              
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _legendItem("Hábitos", Colors.white),
-                  const SizedBox(width: 20),
-                  _legendItem("Tareas", Colors.white24),
+                  _statCard(
+                    "RACHAS HOY", 
+                    "${_isCurrentWeek() ? widget.habits.where((h) => h.isCompletedToday).length : 0}", 
+                    Icons.local_fire_department_rounded, 
+                    Colors.orangeAccent
+                  ),
+                  const SizedBox(width: 10),
+                  _statCard(
+                    "META SEMANAL", 
+                    "${stats['done']}/${stats['total']}", 
+                    Icons.stars_rounded, 
+                    const Color(0xFFADFF2F)
+                  ),
                 ],
               ),
+              const SizedBox(height: 10),
+              
+              _buildProgressPanel(stats['percent']),
 
-              const SizedBox(height: 50),
-              _sectionHeader("RESUMEN GENERAL"),
+              const SizedBox(height: 35),
+              _sectionHeader("ACTIVIDAD SEMANAL"),
+              const SizedBox(height: 20),
+              _buildChart(),
+              
+              const SizedBox(height: 35),
+              _sectionHeader("MIS HÁBITOS"),
               const SizedBox(height: 15),
-              _statTile("Hábitos Activos", "${widget.habits.length}", Icons.auto_awesome_outlined),
-              _statTile("Tareas Completadas", "${widget.priorities.where((p) => p['isDone']).length}/${widget.priorities.length}", Icons.check_circle_outline),
-
+              _buildHabitList(),
               const SizedBox(height: 40),
-              _sectionHeader("DETALLE POR HÁBITO"),
-              const SizedBox(height: 15),
-
-              // LISTA DE HÁBITOS SIN DATOS DE EJEMPLO
-              if (widget.habits.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Text("No hay hábitos creados aún.", style: TextStyle(color: Colors.white24, fontSize: 14)),
-                )
-              else
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: widget.habits.length,
-                  itemBuilder: (context, index) {
-                    final habit = widget.habits[index];
-                    
-                    // PROGRESO REAL: Basado solo en si está hecho hoy (1/7) o no (0/7)
-                    // Para que sea 2/7, 3/7, etc., necesitamos guardar el histórico.
-                    double progress = habit.isCompletedToday ? (1 / 7) : 0.0;
-                    int daysDone = habit.isCompletedToday ? 1 : 0;
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 15),
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(20)),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(habit.name, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                              Text("$daysDone/7 DÍAS", style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Stack(
-                            children: [
-                              Container(height: 6, width: double.infinity, decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(10))),
-                              FractionallySizedBox(
-                                widthFactor: progress,
-                                child: Container(
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: habit.color,
-                                    borderRadius: BorderRadius.circular(10),
-                                    boxShadow: [BoxShadow(color: habit.color.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2))]
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text("${(progress * 100).toInt()}% de consistencia semanal", style: TextStyle(color: habit.color.withOpacity(0.7), fontSize: 10, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              const SizedBox(height: 50),
             ],
           ),
         ),
@@ -208,32 +131,155 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Widget _legendItem(String label, Color color) {
-    return Row(
-      children: [
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 12)),
-      ],
+  // --- COMPONENTES LIMPIOS ---
+
+  Widget _statCard(String title, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: const Color(0xFF151517),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(height: 10),
+            Text(title, style: const TextStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+            const SizedBox(height: 2),
+            Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _statTile(String label, String value, IconData icon) {
+  Widget _buildProgressPanel(double percent) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(20)),
-      child: Row(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: const Color(0xFF151517),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
         children: [
-          Icon(icon, color: Colors.white38, size: 20),
-          const SizedBox(width: 15),
-          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 15)),
-          const Spacer(),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("LOGRO TOTAL", style: TextStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.bold)),
+              Text("${(percent * 100).toInt()}%", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(5),
+            child: LinearProgressIndicator(
+              value: percent,
+              minHeight: 6,
+              backgroundColor: Colors.white.withOpacity(0.05),
+              color: const Color(0xFFADFF2F),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _sectionHeader(String text) => Text(text, style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5));
+  Widget _buildWeekSelector(String range) {
+    return Container(
+      decoration: BoxDecoration(color: const Color(0xFF151517), borderRadius: BorderRadius.circular(15)),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(icon: const Icon(Icons.chevron_left, color: Colors.white70, size: 20), 
+            onPressed: () => setState(() => _selectedWeek = _selectedWeek.subtract(const Duration(days: 7)))),
+          Text(range.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          IconButton(icon: const Icon(Icons.chevron_right, color: Colors.white70, size: 20), 
+            onPressed: () => setState(() => _selectedWeek = _selectedWeek.add(const Duration(days: 7)))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChart() {
+    return SizedBox(
+      height: 160,
+      child: BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          maxY: 10,
+          barGroups: List.generate(7, (i) {
+            // Solo mostramos datos en la barra del día actual si estamos en la semana actual
+            bool isToday = _isCurrentWeek() && (i == DateTime.now().weekday - 1);
+            
+            return BarChartGroupData(
+              x: i,
+              barRods: [
+                // Barra de Hábitos (Blanca)
+                BarChartRodData(
+                  toY: isToday ? widget.habits.where((h) => h.isCompletedToday).length.toDouble() : 0, 
+                  color: Colors.white, 
+                  width: 5,
+                  borderRadius: BorderRadius.circular(2)
+                ),
+                // Barra de Tareas (Opaca)
+                BarChartRodData(
+                  toY: isToday ? widget.priorities.where((p) => p['isDone']).length.toDouble() : 0, 
+                  color: Colors.white.withOpacity(0.1), 
+                  width: 5,
+                  borderRadius: BorderRadius.circular(2)
+                ),
+              ],
+            );
+          }),
+          titlesData: FlTitlesData(
+            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (v, m) => Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(['L','M','X','J','V','S','D'][v.toInt()], style: const TextStyle(color: Colors.white24, fontSize: 10)),
+                ),
+              ),
+            ),
+          ),
+          gridData: const FlGridData(show: false),
+          borderData: FlBorderData(show: false),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHabitList() {
+    if (widget.habits.isEmpty) {
+      return const Center(child: Text("No hay hábitos creados", style: TextStyle(color: Colors.white10, fontSize: 12)));
+    }
+    return Column(
+      children: widget.habits.map((h) => Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+        decoration: BoxDecoration(color: const Color(0xFF151517), borderRadius: BorderRadius.circular(15)),
+        child: Row(
+          children: [
+            Container(width: 3, height: 15, decoration: BoxDecoration(color: h.color, borderRadius: BorderRadius.circular(5))),
+            const SizedBox(width: 12),
+            Text(h.name, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w400)),
+            const Spacer(),
+            Icon(
+              h.isCompletedToday ? Icons.check_circle_rounded : Icons.radio_button_off_rounded, 
+              color: h.isCompletedToday ? h.color : Colors.white10, 
+              size: 18
+            ),
+          ],
+        ),
+      )).toList(),
+    );
+  }
+
+  Widget _sectionHeader(String title) => Text(title, style: const TextStyle(color: Colors.white24, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1.2));
 }
