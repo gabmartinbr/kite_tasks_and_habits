@@ -65,51 +65,93 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       endDrawer: _buildRightSlider(context),
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        actions: [
-          Builder(builder: (context) => IconButton(
-            icon: const Icon(Icons.notes_rounded, color: Colors.white),
-            onPressed: () => Scaffold.of(context).openEndDrawer(),
-          )),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(formattedDate.toUpperCase(), style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
-            const Text("Hoy", style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 25),
-            Row(children: [
-              _buildSquareStat("TAREAS", "$taskCompleted/${widget.priorities.length}"),
-              const SizedBox(width: 15),
-              _buildSquareStat("HÁBITOS", "$habitCompleted/${activeHabits.length}"),
-            ]),
-            const SizedBox(height: 15),
-            _buildDailySummaryCard(),
-            const SizedBox(height: 40),
-            _sectionHeader("PRIORIDADES"),
-            ...List.generate(widget.priorities.length, (i) => _buildPriorityItem(i)),
-            const SizedBox(height: 40),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              _sectionHeader("HÁBITOS"),
-              IconButton(icon: const Icon(Icons.add, color: Colors.white, size: 20), onPressed: _showAddHabit),
-            ]),
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: activeHabits.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 10),
-              itemBuilder: (context, index) => GestureDetector(
-                onLongPress: () => _showHabitActions(activeHabits[index]),
-                child: _buildHabitItem(activeHabits[index]),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 10),
+              
+              // CABECERA: Fecha y Botón alineados horizontalmente
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        formattedDate.toUpperCase(),
+                        style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                      const Text(
+                        "Hoy",
+                        style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  Builder(
+                    builder: (context) => IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(Icons.notes_rounded, color: Colors.white, size: 28),
+                      onPressed: () => Scaffold.of(context).openEndDrawer(),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 50),
-          ],
+
+              const SizedBox(height: 25),
+
+              // Estadísticas Rápidas
+              Row(
+                children: [
+                  _buildSquareStat("TAREAS", "$taskCompleted/${widget.priorities.length}"),
+                  const SizedBox(width: 15),
+                  _buildSquareStat("HÁBITOS", "$habitCompleted/${activeHabits.length}"),
+                ],
+              ),
+
+              const SizedBox(height: 15),
+              _buildDailySummaryCard(),
+              const SizedBox(height: 40),
+              
+              _sectionHeader("PRIORIDADES"),
+              ...List.generate(widget.priorities.length, (i) => _buildPriorityItem(i)),
+              
+              const SizedBox(height: 40),
+              
+              // Sección de Hábitos con botón de añadir
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _sectionHeader("HÁBITOS"),
+                  IconButton(
+                    icon: const Icon(Icons.add, color: Colors.white, size: 20),
+                    onPressed: _showAddHabit,
+                  ),
+                ],
+              ),
+
+              // Lista de Hábitos con Separadores
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: activeHabits.length,
+                separatorBuilder: (context, index) => const Divider(
+                  color: Colors.white10, 
+                  height: 1, 
+                  thickness: 0.5,
+                ),
+                itemBuilder: (context, index) => GestureDetector(
+                  onLongPress: () => _showHabitActions(activeHabits[index]),
+                  child: _buildHabitItem(activeHabits[index]),
+                ),
+              ),
+              const SizedBox(height: 50),
+            ],
+          ),
         ),
       ),
     );
@@ -137,7 +179,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildRightSlider(BuildContext context) {
     return SizedBox(
-      width: MediaQuery.of(context).size.width * 0.5,
+      width: MediaQuery.of(context).size.width * 0.6,
       child: Drawer(
         backgroundColor: Colors.transparent,
         child: BackdropFilter(
@@ -183,10 +225,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildHabitItem(Habit h) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(children: [
         IconButton(
-          icon: Icon(h.isCompletedToday ? Icons.check_box : Icons.check_box_outline_blank, color: h.isCompletedToday ? h.color : Colors.white24),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          icon: Icon(
+            h.isCompletedToday ? Icons.check_box : Icons.check_box_outline_blank, 
+            color: h.isCompletedToday ? h.color : Colors.white24,
+            size: 24,
+          ),
           onPressed: () => setState(() {
             if (h.isCompletedToday) {
               h.completedDates.removeWhere((d) => isSameDay(d, DateTime.now()));
@@ -195,16 +243,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
             }
           }),
         ),
+        const SizedBox(width: 12),
         Text(h.name, style: const TextStyle(color: Colors.white, fontSize: 16)),
         const Spacer(),
-        Icon(Icons.circle, color: h.color, size: 8),
+        // Punto de color más grande y alineado con el botón (+)
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Icon(Icons.circle, color: h.color, size: 12),
+        ),
       ]),
     );
   }
 
-  Widget _buildSquareStat(String t, String v) => Expanded(child: Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(20)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t, style: const TextStyle(color: Colors.grey, fontSize: 10)), const SizedBox(height: 5), Text(v, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold))])));
-  Widget _buildPriorityItem(int i) { var p = widget.priorities[i]; return Row(children: [Text("${i + 1}.", style: const TextStyle(color: Color.fromARGB(183, 180, 180, 180))), const SizedBox(width: 10), Expanded(child: TextField(controller: p['controller'], style: TextStyle(color: Colors.white, fontSize: 14, decoration: p['isDone'] ? TextDecoration.lineThrough : null), decoration: const InputDecoration(border: InputBorder.none))), Checkbox(value: p['isDone'], onChanged: (v) => setState(() => p['isDone'] = v), activeColor: Colors.white, checkColor: Colors.black)]);}
-  Widget _sectionHeader(String t) => Text(t, style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2));
-  void _showAddHabit() => showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (c) => AddHabitScreen(existingHabits: widget.habits, onSave: (h) => setState(() => widget.habits.add(h))));
+  Widget _buildSquareStat(String t, String v) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(t, style: const TextStyle(color: Colors.grey, fontSize: 10)),
+        const SizedBox(height: 5),
+        Text(v, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+      ]),
+    ),
+  );
+
+  Widget _buildPriorityItem(int i) {
+    var p = widget.priorities[i];
+    return Row(children: [
+      Text("${i + 1}.", style: const TextStyle(color: Colors.grey)),
+      const SizedBox(width: 10),
+      Expanded(
+        child: TextField(
+          controller: p['controller'],
+          style: TextStyle(
+            color: Colors.white, 
+            fontSize: 14, 
+            decoration: p['isDone'] ? TextDecoration.lineThrough : null
+          ),
+          decoration: const InputDecoration(border: InputBorder.none),
+        ),
+      ),
+      Checkbox(
+        value: p['isDone'],
+        onChanged: (v) => setState(() => p['isDone'] = v),
+        activeColor: Colors.white,
+        checkColor: Colors.black,
+      ),
+    ]);
+  }
+
+  Widget _sectionHeader(String t) => Text(
+    t, 
+    style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)
+  );
+
+  void _showAddHabit() => showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (c) => AddHabitScreen(existingHabits: widget.habits, onSave: (h) => setState(() => widget.habits.add(h))),
+  );
+
   bool isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 }

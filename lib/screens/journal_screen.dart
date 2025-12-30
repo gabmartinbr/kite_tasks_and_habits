@@ -13,7 +13,29 @@ class JournalScreen extends StatefulWidget {
 class _JournalScreenState extends State<JournalScreen> {
   DateTime _viewDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
 
-  // --- FUNCIÓN DE ACCIONES (LONG PRESS) ---
+  // --- CÁLCULO DE RACHA DINÁMICA ---
+  int _calculateRealStreak(Habit habit) {
+    if (habit.completedDates.isEmpty) return 0;
+    
+    int streak = 0;
+    DateTime today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    
+    // Comprobamos si hoy está completado
+    bool doneToday = habit.completedDates.any((d) => 
+        d.year == today.year && d.month == today.month && d.day == today.day);
+    
+    // Si no está hecho hoy, la racha sigue viva si se hizo ayer
+    DateTime checkDate = doneToday ? today : today.subtract(const Duration(days: 1));
+
+    while (habit.completedDates.any((d) => 
+        d.year == checkDate.year && d.month == checkDate.month && d.day == checkDate.day)) {
+      streak++;
+      checkDate = checkDate.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
+
+  // --- ACCIONES DEL HÁBITO ---
   void _showHabitActions(Habit habit) {
     showModalBottomSheet(
       context: context,
@@ -38,8 +60,6 @@ class _JournalScreenState extends State<JournalScreen> {
               ListTile(
                 leading: const Icon(Icons.archive_outlined, color: Colors.white70),
                 title: const Text("Archivar Hábito", style: TextStyle(color: Colors.white)),
-                subtitle: const Text("Se mantiene en este historial pero desaparece de hoy", 
-                  style: TextStyle(color: Colors.white24, fontSize: 11)),
                 onTap: () {
                   setState(() => habit.deletedAt = DateTime.now());
                   Navigator.pop(context);
@@ -158,6 +178,8 @@ class _JournalScreenState extends State<JournalScreen> {
   }
 
   Widget _buildHabitRow(Habit h) {
+    int streak = _calculateRealStreak(h);
+    bool hasStreak = streak > 0;
     final int daysInMonth = DateUtils.getDaysInMonth(_viewDate.year, _viewDate.month);
     final int offset = DateTime(_viewDate.year, _viewDate.month, 1).weekday - 1;
 
@@ -176,8 +198,35 @@ class _JournalScreenState extends State<JournalScreen> {
                   Text(h.name.toUpperCase(), 
                     style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
-                  Text("${h.currentStreak} DÍAS", 
-                    style: TextStyle(color: h.color.withOpacity(0.7), fontSize: 9, fontWeight: FontWeight.w900)),
+                  Row(
+                    children: [
+                      // FUEGO GAMIFICADO
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Icon(
+                            Icons.local_fire_department_rounded, 
+                            // Gris claro (white10) si no hay racha, color del hábito si la hay
+                            color: hasStreak ? h.color : const Color.fromARGB(137, 255, 255, 255), 
+                            size: 13
+                          ),
+                          if (!hasStreak)
+                            Transform.rotate(
+                              angle: -0.5,
+                              child: Container(width: 12, height: 1.5, color: Colors.white24),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(width: 6),
+                      Text(hasStreak ? "$streak DÍAS" : "0 DÍAS", 
+                        style: TextStyle(
+                          color: hasStreak ? h.color.withOpacity(0.7) : Colors.white24, 
+                          fontSize: 9, 
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5
+                        )),
+                    ],
+                  ),
                 ],
               ),
             ),
