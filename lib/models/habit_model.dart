@@ -6,8 +6,9 @@ class Habit {
   List<bool> activeDays; 
   int currentStreak;
   bool isCompletedToday;
-  DateTime createdAt;    // Fecha de nacimiento del hábito
-  DateTime? deletedAt;   // Fecha en la que se "borró"
+  List<DateTime> completedDates; // Historial de días completados
+  DateTime createdAt;
+  DateTime? deletedAt;
 
   Habit({
     required this.name,
@@ -15,7 +16,8 @@ class Habit {
     required this.activeDays,
     this.currentStreak = 0,
     this.isCompletedToday = false,
+    List<DateTime>? completedDates,
     required this.createdAt,
     this.deletedAt,
-  });
+  }) : completedDates = completedDates ?? [];
 }

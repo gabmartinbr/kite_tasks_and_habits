@@ -16,7 +16,7 @@ class _JournalScreenState extends State<JournalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // FILTRO HISTÓRICO:
+    // Filtro para mostrar solo hábitos que existían en el mes seleccionado y no estaban borrados
     final filteredHabits = widget.habits.where((h) {
       DateTime monthStart = DateTime(_viewDate.year, _viewDate.month, 1);
       DateTime nextMonthStart = DateTime(_viewDate.year, _viewDate.month + 1, 1);
@@ -39,16 +39,15 @@ class _JournalScreenState extends State<JournalScreen> {
           const SizedBox(height: 20),
           _buildMonthHeader(),
           const SizedBox(height: 15),
-          _buildGridCalendar(),
+          _buildGridCalendar(), // Calendario principal (Heatmap)
           const SizedBox(height: 40),
           const Text("ESTADO DE HÁBITOS", 
             style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-          const SizedBox(height: 5),
-          const Text("(Mantén presionado para opciones)", style: TextStyle(color: Colors.white24, fontSize: 10)),
           const SizedBox(height: 25),
           if (filteredHabits.isEmpty)
             const Text("Sin registros para este mes.", style: TextStyle(color: Colors.white10)),
           ...filteredHabits.map((h) => _buildHabitRow(h)),
+          const SizedBox(height: 50),
         ],
       ),
     );
@@ -58,19 +57,25 @@ class _JournalScreenState extends State<JournalScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        IconButton(icon: const Icon(Icons.chevron_left, color: Colors.blueAccent), 
-          onPressed: () => setState(() => _viewDate = DateTime(_viewDate.year, _viewDate.month - 1, 1))),
+        IconButton(
+          icon: const Icon(Icons.chevron_left, color: Color.fromARGB(255, 175, 175, 175)), 
+          onPressed: () => setState(() => _viewDate = DateTime(_viewDate.year, _viewDate.month - 1, 1))
+        ),
         Text(DateFormat('MMMM yyyy', 'es').format(_viewDate).toUpperCase(), 
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
-        IconButton(icon: const Icon(Icons.chevron_right, color: Colors.blueAccent), 
-          onPressed: () => setState(() => _viewDate = DateTime(_viewDate.year, _viewDate.month + 1, 1))),
+        IconButton(
+          icon: const Icon(Icons.chevron_right, color: Color.fromARGB(255, 175, 175, 175)), 
+          onPressed: () => setState(() => _viewDate = DateTime(_viewDate.year, _viewDate.month + 1, 1))
+        ),
       ],
     );
   }
 
+  // Calendario principal que muestra la actividad general
   Widget _buildGridCalendar() {
     final int days = DateUtils.getDaysInMonth(_viewDate.year, _viewDate.month);
     final int offset = DateTime(_viewDate.year, _viewDate.month, 1).weekday - 1;
+    
     return GridView.builder(
       shrinkWrap: true, 
       physics: const NeverScrollableScrollPhysics(),
@@ -80,11 +85,21 @@ class _JournalScreenState extends State<JournalScreen> {
       itemBuilder: (context, index) {
         if (index < offset) return const SizedBox.shrink();
         final int d = index - offset + 1;
+        DateTime dateInGrid = DateTime(_viewDate.year, _viewDate.month, d);
+
+        // Contar cuántos hábitos se completaron ese día
+        int completedCount = widget.habits.where((h) => 
+          h.completedDates.any((cd) => cd.year == dateInGrid.year && cd.month == dateInGrid.month && cd.day == dateInGrid.day)
+        ).length;
+
         bool isToday = d == DateTime.now().day && _viewDate.month == DateTime.now().month && _viewDate.year == DateTime.now().year;
+
         return Container(
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isToday ? Colors.white38 : Colors.white.withOpacity(0.03), 
+            color: completedCount > 0 
+                ? const Color.fromARGB(220, 45, 196, 121).withOpacity((completedCount / (widget.habits.isEmpty ? 1 : widget.habits.length)).clamp(0.2, 0.9)) 
+                : Colors.white.withOpacity(0.03), 
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: isToday ? Colors.white38 : Colors.white12)
           ),
@@ -94,80 +109,71 @@ class _JournalScreenState extends State<JournalScreen> {
     );
   }
 
+  // Fila de cada hábito con su mini-calendario propio
   Widget _buildHabitRow(Habit h) {
-    return GestureDetector(
-      onLongPress: () => _showOptions(h),
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 30),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(h.name.toUpperCase(), 
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text("🔥 ${h.currentStreak} RACHA", 
-                    style: TextStyle(color: h.color, fontSize: 10, fontWeight: FontWeight.w900)),
-                ],
-              ),
-            ),
-            // Cuadrícula 7x4
-            SizedBox(
-              width: 150,
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7, mainAxisSpacing: 5, crossAxisSpacing: 5),
-                itemCount: 28,
-                itemBuilder: (context, index) {
-                  // Simulación visual: el último punto es hoy
-                  bool active = (index == 27) ? h.isCompletedToday : (index % 6 != 0); 
-                  return Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle, 
-                      color: active ? h.color : Colors.white.withOpacity(0.05)
-                    ),
-                  );
-                },
-              ),
-            )
-          ],
-        ),
-      ),
-    );
-  }
+    // Calculamos los mismos parámetros que el calendario de arriba para que coincidan las formas
+    final int daysInMonth = DateUtils.getDaysInMonth(_viewDate.year, _viewDate.month);
+    final int offset = DateTime(_viewDate.year, _viewDate.month, 1).weekday - 1;
 
-  void _showOptions(Habit h) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text("Gestionar '${h.name}'"),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              setState(() => h.deletedAt = DateTime.now());
-              Navigator.pop(context);
-            },
-            child: const Text("Archivar (Mantiene historial)"),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 30),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(h.name.toUpperCase(), 
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text("🔥 ${h.currentStreak} RACHA", 
+                  style: TextStyle(color: h.color, fontSize: 10, fontWeight: FontWeight.w900)),
+              ],
+            ),
           ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () {
-              setState(() {
-                widget.habits.remove(h); // BORRADO TOTAL
-              });
-              Navigator.pop(context);
-            },
-            child: const Text("Eliminar Definitivamente"),
-          ),
+          const SizedBox(width: 20),
+          // MINI CALENDARIO DE PUNTOS (Réplica del de arriba)
+          SizedBox(
+            width: 120, // Ajustamos el ancho para que quepa bien a la derecha
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 7, // 7 días de la semana
+                mainAxisSpacing: 4, 
+                crossAxisSpacing: 4
+              ),
+              itemCount: daysInMonth + offset,
+              itemBuilder: (context, index) {
+                if (index < offset) return const SizedBox.shrink(); // Espacios vacíos al inicio del mes
+                
+                final int day = index - offset + 1;
+                DateTime dateInGrid = DateTime(_viewDate.year, _viewDate.month, day);
+                
+                // Comprobamos si este hábito específico se completó en esta fecha
+                bool active = h.completedDates.any((cd) => 
+                  cd.year == dateInGrid.year && cd.month == dateInGrid.month && cd.day == dateInGrid.day
+                );
+
+                return Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle, 
+                    // Si está activo, fondo de color sólido. 
+                    // Si no, transparente para que solo se vea el borde.
+                    color: active ? h.color : Colors.transparent, 
+                    border: Border.all(
+                      // Borde del color del hábito si está activo, 
+                      // o un gris muy sutil (blanco con 0.05 de opacidad) si está vacío.
+                      color: active ? h.color : Colors.white.withOpacity(0.3), 
+                      width: 2.0, // Grosor fino para que sea elegante
+                    ),
+                  ),
+                );
+              },
+            ),
+          )
         ],
-        cancelButton: CupertinoActionSheetAction(
-          child: const Text("Cancelar"),
-          onPressed: () => Navigator.pop(context),
-        ),
       ),
     );
   }
