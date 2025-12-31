@@ -51,11 +51,18 @@ class LiquidPainter extends CustomPainter {
 
     canvas.save();
     canvas.clipPath(Path()..addOval(Rect.fromCircle(center: center, radius: radius)));
+    
     if (smoothProgress > 0) {
-      final double currentLevel = size.height - (size.height * smoothProgress);
-      _drawWave(canvas, size, currentLevel, waveOffset * 0.8, const Color.fromARGB(255, 153, 153, 153).withOpacity(0.15), 6.0);
-      _drawWave(canvas, size, currentLevel, waveOffset + pi, const Color.fromARGB(255, 153, 153, 153).withOpacity(0.35), 4.0);
+      // --- CORRECCIÓN AQUÍ ---
+      // 1. Añadimos un pequeño offset negativo (-10) para que el nivel suba más allá del borde superior al final.
+      // 2. Multiplicamos la amplitud por (1 - smoothProgress) para que las ondas se calmen al llegar arriba.
+      final double currentLevel = size.height - (size.height * smoothProgress) - (smoothProgress > 0.9 ? 10 : 0);
+      final double adaptiveAmplitude = 6.0 * (1.0 - smoothProgress); 
+
+      _drawWave(canvas, size, currentLevel, waveOffset * 0.8, const Color.fromARGB(255, 153, 153, 153).withOpacity(0.15), adaptiveAmplitude);
+      _drawWave(canvas, size, currentLevel, waveOffset + pi, const Color.fromARGB(255, 153, 153, 153).withOpacity(0.35), adaptiveAmplitude);
     }
+    
     canvas.restore();
   }
 
