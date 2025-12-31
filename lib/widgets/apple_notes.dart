@@ -9,30 +9,40 @@ class AppleNotes extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24), // Más aire
       decoration: BoxDecoration(
         color: const Color(0xFF1C1C1E),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28), // Bordes más orgánicos
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(CupertinoIcons.doc_text, color: const Color.fromARGB(255, 197, 197, 197), size: 14),
-              const SizedBox(width: 8),
-              Text("PENSAMIENTOS", style: TextStyle(color: const Color.fromARGB(255, 199, 199, 199), fontSize: 10, fontWeight: FontWeight.bold)),
-            ],
+          Text(
+            "PENSAMIENTOS",
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.3),
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.5,
+            ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           TextField(
             controller: controller,
             maxLines: null,
-            style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4, fontWeight: FontWeight.w400),
-            decoration: const InputDecoration(
+            cursorColor: Colors.white24,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              height: 1.5,
+              fontWeight: FontWeight.w300, // Fuente más ligera
+            ),
+            decoration: InputDecoration(
               hintText: "Escribe cómo va tu día...",
-              hintStyle: TextStyle(color: Colors.white10),
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.05)),
               border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
             ),
           ),
         ],

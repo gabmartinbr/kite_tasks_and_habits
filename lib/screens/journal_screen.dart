@@ -108,7 +108,7 @@ class _JournalScreenState extends State<JournalScreen> {
           const SizedBox(height: 15),
           _buildGridCalendar(),
           const SizedBox(height: 40),
-          const Text("ESTADO DE HÁBITOS", 
+          const Text("ESTADO DE HÁBITOS \n(mantén para opciones)", 
             style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
           const SizedBox(height: 25),
           if (filteredHabits.isEmpty)

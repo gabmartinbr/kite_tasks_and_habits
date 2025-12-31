@@ -16,11 +16,26 @@ dependencies:
   intl: ^0.20.2
   fl_chart: ^1.1.1
   shared_preferences: ^2.2.2
+  http: ^1.6.0
+  image_picker: ^0.8.7+5
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
+  assets: 
+    - assets/kite_logo.webp
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/kite_logo.webp"
+  # Para Android (Icono Adaptativo)
+  adaptive_icon_background: "#000000" # Fondo negro puro (o el color de tu app)
+  adaptive_icon_foreground: "assets/kite_logo.webp" # Tu logo con transparencia
+  # Para iOS
+  remove_alpha_ios: true # iOS no permite transparencias, esto le pone fondo negro
