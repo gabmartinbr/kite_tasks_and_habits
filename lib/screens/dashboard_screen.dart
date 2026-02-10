@@ -25,18 +25,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadDailyNote();
-    
-    // Guardado automático mientras escribes
+    _initData(); // Carga inicial de nota y prioridades
+
+    // Guardado automático de la nota mientras se escribe
     _noteController.addListener(() {
       StorageService.saveDailyNote(_noteController.text);
     });
   }
 
+  // Carga nota y prioridades del día actual
+  Future<void> _initData() async {
+    await _loadDailyNote();
+    await _loadDailyPriorities();
+  }
+
   Future<void> _loadDailyNote() async {
     String savedNote = await StorageService.loadDailyNote();
+    if (_noteController.text != savedNote) {
+      setState(() {
+        _noteController.text = savedNote;
+      });
+    }
+  }
+
+  Future<void> _loadDailyPriorities() async {
+    // Busca las prioridades de la fecha actual en Storage
+    List<Map<String, dynamic>> saved = await StorageService.loadPriorities();
+    
     setState(() {
-      _noteController.text = savedNote;
+      if (saved.isNotEmpty) {
+        // Cargar datos guardados en los controladores existentes
+        for (int i = 0; i < widget.priorities.length; i++) {
+          if (i < saved.length) {
+            widget.priorities[i]['controller'].text = saved[i]['text'] ?? "";
+            widget.priorities[i]['isDone'] = saved[i]['isDone'] ?? false;
+          }
+        }
+      } else {
+        // ES UN DÍA NUEVO O SIN DATOS: Resetear campos visuales
+        for (var p in widget.priorities) {
+          p['controller'].clear();
+          p['isDone'] = false;
+        }
+      }
     });
   }
 
@@ -57,7 +88,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: _getBody(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
+        onTap: (index) {
+          setState(() => _selectedIndex = index);
+          // Si volvemos al dashboard, refrescamos los datos del día
+          if (index == 0) _initData(); 
+        },
         backgroundColor: const Color(0xFF1C1C1E),
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white24,
@@ -88,7 +123,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 20),
             _buildHeader(formattedDate),
             const SizedBox(height: 25),
-            
             Row(
               children: [
                 _buildSquareStat("TAREAS", "$taskCompleted/${widget.priorities.length}"),
@@ -96,64 +130,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _buildSquareStat("HÁBITOS", "$habitCompleted/${activeHabits.length}"),
               ],
             ),
-            
             const SizedBox(height: 15),
-            // Se envía título vacío para que no ocupe espacio
             _buildWideStat("Escribe un pensamiento...", _noteController),
-
             const SizedBox(height: 40),
             _buildPrioritiesSection(),
-            
             const SizedBox(height: 40),
             _buildHabitsSection(activeHabits),
-            
             const SizedBox(height: 50),
           ],
         ),
       ),
     );
   }
-
-  // --- COMPONENTES MODIFICADOS ---
-
-  Widget _buildWideStat(String hint, TextEditingController controller) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E), 
-        borderRadius: BorderRadius.circular(20)
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center, // Centra verticalmente el icono y el texto
-        children: [
-          IconButton(
-            icon: const Icon(Icons.sticky_note_2_rounded, color: Colors.white38, size: 22),
-            onPressed: () => Navigator.push(
-              context, 
-              MaterialPageRoute(builder: (context) => NotesScreen(controller: controller))
-            ),
-          ),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              maxLines: 1,
-              style: const TextStyle(color: Colors.white, fontSize: 15),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: const TextStyle(color: Colors.white10, fontSize: 14),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero, // Elimina espacios internos extra
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- RESTO DE COMPONENTES ---
 
   Widget _buildHeader(String date) {
     return Row(
@@ -191,6 +179,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildWideStat(String hint, TextEditingController controller) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(color: const Color(0xFF1C1C1E), borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.sticky_note_2_rounded, color: Colors.white38, size: 22),
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (context) => NotesScreen(controller: controller)));
+              _loadDailyNote();
+            },
+          ),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              maxLines: 1,
+              style: const TextStyle(color: Colors.white, fontSize: 15),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: const TextStyle(color: Colors.white10, fontSize: 14),
+                border: InputBorder.none,
+                isDense: true,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPrioritiesSection() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _sectionHeader("PRIORIDADES"),
@@ -203,33 +223,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     var p = widget.priorities[i];
     return Row(
       children: [
-        // --- NÚMERO DE PRIORIDAD ---
         Padding(
           padding: const EdgeInsets.only(right: 12),
-          child: Text(
-            "${i + 1}.",
-            style: TextStyle(
-              color: p['isDone'] ? Colors.white10 : Colors.white24,
-              fontSize: 15,
-              fontWeight: FontWeight.w300,
-            ),
-          ),
+          child: Text("${i + 1}.", style: TextStyle(color: p['isDone'] ? Colors.white10 : Colors.white24, fontSize: 15, fontWeight: FontWeight.w300)),
         ),
-        // ---------------------------
         Expanded(
           child: TextField(
             controller: p['controller'],
+            onChanged: (_) => StorageService.savePriorities(widget.priorities),
             style: TextStyle(
-              color: p['isDone'] ? Colors.white24 : Colors.white,
-              decoration: p['isDone'] ? TextDecoration.lineThrough : null,
-              fontSize: 15,
-              fontWeight: FontWeight.w300,
+              color: p['isDone'] ? Colors.white24 : Colors.white, 
+              decoration: p['isDone'] ? TextDecoration.lineThrough : null, 
+              fontSize: 15
             ),
             decoration: InputDecoration(
-              hintText: "Prioridad ${i + 1}",
-              hintStyle: const TextStyle(color: Color.fromARGB(61, 255, 255, 255)),
-              border: InputBorder.none,
-              isDense: true,
+              hintText: "Prioridad ${i + 1}", 
+              hintStyle: const TextStyle(color: Colors.white10), 
+              border: InputBorder.none, 
+              isDense: true
             ),
           ),
         ),
@@ -241,11 +252,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           },
           activeColor: Colors.transparent,
           checkColor: Colors.white,
-          side: const BorderSide(color: Color.fromARGB(80, 212, 212, 212), width: 1.5),
+          side: const BorderSide(color: Colors.white24, width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         ),
         IconButton(
-          icon: const Icon(Icons.delete_outline_rounded, color: Color.fromARGB(88, 255, 255, 255), size: 20),
+          icon: const Icon(Icons.delete_outline_rounded, color: Colors.white10, size: 20),
           onPressed: () {
             setState(() {
               p['controller'].clear();
@@ -278,9 +289,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: IconButton(
-        icon: Icon(
-          h.isCompletedToday ? Icons.done_rounded : Icons.radio_button_unchecked_rounded, 
-          color: h.isCompletedToday ? h.color : Colors.white24, size: 26),
+        icon: Icon(h.isCompletedToday ? Icons.done_rounded : Icons.radio_button_unchecked_rounded, color: h.isCompletedToday ? h.color : Colors.white24, size: 26),
         onPressed: () {
           setState(() {
             if (h.isCompletedToday) {
@@ -315,9 +324,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Navigator.pop(context);
               Navigator.push(context, MaterialPageRoute(builder: (context) => const PomodoroScreen()));
             }),
-            _drawerItem(Icons.edit_note_rounded, "Notas del día", () {
+            _drawerItem(Icons.edit_note_rounded, "Notas del día", () async {
               Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => NotesScreen(controller: _noteController)));
+              await Navigator.push(context, MaterialPageRoute(builder: (context) => NotesScreen(controller: _noteController)));
+              _loadDailyNote();
             }),
           ],
         ),
